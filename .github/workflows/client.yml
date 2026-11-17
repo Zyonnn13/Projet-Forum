@@ -1,0 +1,26 @@
+# CI du client : format, lint (go vet), compilation, tests.
+name: Client CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["client/**", "static/**", "go.mod", "go.sum", ".github/workflows/client.yml"]
+  pull_request:
+    paths: ["client/**", "static/**", "go.mod", "go.sum", ".github/workflows/client.yml"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Format (gofmt)
+        run: test -z "$(gofmt -l client)"
+      - name: Lint (go vet)
+        run: go vet ./client/...
+      - name: Compilation
+        run: go build ./client/...
+      - name: Tests
+        run: go test ./client/...
