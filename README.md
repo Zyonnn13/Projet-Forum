@@ -261,14 +261,3 @@ migrations et tests ; Scalingo attend qu'ils soient verts avant de déployer.
 |-----------|----------------------|------|
 | 2 conteneurs S | _à compléter (simulateur Scalingo)_ | _à compléter_ |
 | PostgreSQL Starter 512 | _à compléter_ | _à compléter_ |
-
-### En cas de panne
-
-> _À tester réellement avant le rendu, puis cocher._
-
-- [ ] Logs de l'API : `scalingo --app <app-api> logs --lines 200`
-- [ ] Logs de la base : `scalingo --app <app-api> addons` (ID), puis `scalingo --app <app-api> logs --addon <ID> --lines 100`
-- [ ] Rollback du code : `git revert <sha> && git push origin main` (liste des déploiements : `scalingo --app <app-api> deployments`)
-- [ ] Rollback d'une migration : `scalingo --app <app-api> run bin/api rollback`
-- [ ] Sauvegardes : `scalingo --app <app-api> --addon <ID> backups`, puis `backups-download --backup <ID>`
-- [ ] Restauration : tunnel `scalingo --app <app-api> db-tunnel SCALINGO_POSTGRESQL_URL`, puis `pg_restore` sur `localhost:10000`
