@@ -115,4 +115,3 @@ func (s *ForumService) UpdateAvatar(token, avatarURL string) error {
 func (s *ForumService) CreateFil(token string, titre string, categoriesID []int) (*dto.FilDeDiscussion, error) {
 	return s.forumApi.CreateFil(token, titre, categoriesID)
 }
-

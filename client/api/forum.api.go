@@ -417,4 +417,3 @@ func (api *ForumApi) CreateFil(token string, titre string, categoriesID []int) (
 
 	return &reponse.Fil, nil
 }
-

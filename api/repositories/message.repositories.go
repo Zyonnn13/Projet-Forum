@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"projet-forum/api/models"
+	"projet-forum/api/utils"
 )
 
 type MessageRepository struct {
@@ -17,13 +18,9 @@ func InitMessageRepository(db *sql.DB) *MessageRepository {
 }
 
 func (r *MessageRepository) Create(m *models.Message) error {
-	query := `INSERT INTO messages (contenu, fil_id, auteur_id) VALUES (?, ?, ?)`
-	result, err := r.db.Exec(query, m.Contenu, m.FilID, m.AuteurID)
-	if err != nil {
-		return err
-	}
-
-	id, err := result.LastInsertId()
+	query := `INSERT INTO messages (contenu, fil_id, auteur_id) VALUES (?, ?, ?) RETURNING id`
+	var id int64
+	err := r.db.QueryRow(utils.Rebind(query), m.Contenu, m.FilID, m.AuteurID).Scan(&id)
 	if err != nil {
 		return err
 	}
@@ -38,7 +35,7 @@ func (r *MessageRepository) FindByID(id int) (*models.Message, error) {
 		LEFT JOIN utilisateurs u ON m.auteur_id = u.id
 		WHERE m.id = ?
 	`
-	row := r.db.QueryRow(query, id)
+	row := r.db.QueryRow(utils.Rebind(query), id)
 
 	m := &models.Message{}
 	var authorUsername, authorEmail, authorRole, authorAvatar string
@@ -65,7 +62,7 @@ func (r *MessageRepository) FindByID(id int) (*models.Message, error) {
 func (r *MessageRepository) CountByFilID(filID int) (int, error) {
 	query := `SELECT COUNT(*) FROM messages WHERE fil_id = ?`
 	var count int
-	err := r.db.QueryRow(query, filID).Scan(&count)
+	err := r.db.QueryRow(utils.Rebind(query), filID).Scan(&count)
 	return count, err
 }
 
@@ -89,7 +86,7 @@ func (r *MessageRepository) FindByFilID(filID int, page, limit int, sortBy strin
 		ORDER BY ` + orderBy + `
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.Query(query, currentUserID, filID, limit, offset)
+	rows, err := r.db.Query(utils.Rebind(query), currentUserID, filID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +102,7 @@ func (r *MessageRepository) FindByFilID(filID int, page, limit int, sortBy strin
 		if err := rows.Scan(&m.ID, &m.Contenu, &m.FilID, &m.AuteurID, &m.ScorePopularite, &createdAt, &authorUsername, &authorEmail, &authorRole, &authorBanned, &authorAvatar, &userReaction); err != nil {
 			return nil, err
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05", string(createdAt)); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, string(createdAt)); err == nil {
 			m.CreatedAt = t
 		}
 		m.UserReaction = userReaction
@@ -124,13 +121,13 @@ func (r *MessageRepository) FindByFilID(filID int, page, limit int, sortBy strin
 
 func (r *MessageRepository) Update(m *models.Message) error {
 	query := `UPDATE messages SET contenu = ? WHERE id = ?`
-	_, err := r.db.Exec(query, m.Contenu, m.ID)
+	_, err := r.db.Exec(utils.Rebind(query), m.Contenu, m.ID)
 	return err
 }
 
 func (r *MessageRepository) Delete(id int) error {
 	query := `DELETE FROM messages WHERE id = ?`
-	_, err := r.db.Exec(query, id)
+	_, err := r.db.Exec(utils.Rebind(query), id)
 	return err
 }
 
@@ -141,7 +138,7 @@ func (r *MessageRepository) React(userID, messageID int, typeReaction string) er
 	}
 
 	var existType string
-	err = tx.QueryRow(`SELECT type FROM reactions WHERE utilisateur_id = ? AND message_id = ?`, userID, messageID).Scan(&existType)
+	err = tx.QueryRow(utils.Rebind(`SELECT type FROM reactions WHERE utilisateur_id = ? AND message_id = ?`), userID, messageID).Scan(&existType)
 
 	if err != nil && err != sql.ErrNoRows {
 		tx.Rollback()
@@ -150,7 +147,7 @@ func (r *MessageRepository) React(userID, messageID int, typeReaction string) er
 
 	scoreChange := 0
 	if err == sql.ErrNoRows {
-		_, err = tx.Exec(`INSERT INTO reactions (utilisateur_id, message_id, type) VALUES (?, ?, ?)`, userID, messageID, typeReaction)
+		_, err = tx.Exec(utils.Rebind(`INSERT INTO reactions (utilisateur_id, message_id, type) VALUES (?, ?, ?)`), userID, messageID, typeReaction)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -165,7 +162,7 @@ func (r *MessageRepository) React(userID, messageID int, typeReaction string) er
 			tx.Rollback()
 			return errors.New("vous avez déjà réagi de cette manière à ce message")
 		} else {
-			_, err = tx.Exec(`UPDATE reactions SET type = ? WHERE utilisateur_id = ? AND message_id = ?`, typeReaction, userID, messageID)
+			_, err = tx.Exec(utils.Rebind(`UPDATE reactions SET type = ? WHERE utilisateur_id = ? AND message_id = ?`), typeReaction, userID, messageID)
 			if err != nil {
 				tx.Rollback()
 				return err
@@ -179,7 +176,7 @@ func (r *MessageRepository) React(userID, messageID int, typeReaction string) er
 	}
 
 	if scoreChange != 0 {
-		_, err = tx.Exec(`UPDATE messages SET score_popularite = score_popularite + ? WHERE id = ?`, scoreChange, messageID)
+		_, err = tx.Exec(utils.Rebind(`UPDATE messages SET score_popularite = score_popularite + ? WHERE id = ?`), scoreChange, messageID)
 		if err != nil {
 			tx.Rollback()
 			return err

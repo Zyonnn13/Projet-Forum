@@ -2,7 +2,6 @@ package app
 
 import (
 	"database/sql"
-	"net/http"
 
 	"projet-forum/api/config"
 	"projet-forum/api/controllers"
@@ -33,13 +32,14 @@ func InitApp() *App {
 	utilisateurRepository := repositories.InitUtilisateurRepository(db)
 	filRepository := repositories.InitFilRepository(db)
 	messageRepository := repositories.InitMessageRepository(db)
+	imageRepository := repositories.InitImageRepository(db)
 
 	// Initialisation des services
 	utilisateurService := services.InitUtilisateurService(utilisateurRepository)
 	filService := services.InitFilService(filRepository)
 	messageService := services.InitMessageService(messageRepository, filRepository)
 	actusService := services.InitActusService()
-	uploadService := services.InitUploadService()
+	uploadService := services.InitUploadService(imageRepository)
 
 	// Initialisation des controllers
 	utilisateurController := controllers.InitUtilisateurController(utilisateurService)
@@ -47,10 +47,12 @@ func InitApp() *App {
 	messageController := controllers.InitMessageController(messageService)
 	actusController := controllers.InitActusController(actusService)
 	uploadController := controllers.InitUploadController(uploadService)
+	healthController := controllers.InitHealthController(db)
 
-	// Routeur racine : sert les fichiers uploadés (/uploads/...) et héberge le sous-routeur /api.
+	// Routeur racine : santé (/health), images (/uploads/...) et sous-routeur /api.
 	rootRouter := mux.NewRouter()
-	rootRouter.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads/"))))
+	rootRouter.HandleFunc("/health", healthController.Health).Methods("GET")
+	rootRouter.HandleFunc("/uploads/{nom}", uploadController.ServeImage).Methods("GET")
 
 	// Enregistrement des routes de l'API (avec ajout du préfixe "/api/...")
 	router := rootRouter.PathPrefix("/api").Subrouter()

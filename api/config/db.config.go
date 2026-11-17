@@ -2,25 +2,20 @@ package config
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func InitDB() *sql.DB {
-	// Recuperation des parametres lies a la base de donnees.
-	user := GetRequiredEnv("DB_USER")
-	pwd := GetEnvWithDefault("DB_PWD", "")
-	host := GetRequiredEnv("DB_HOST")
-	port := GetRequiredEnv("DB_PORT")
-	name := GetRequiredEnv("DB_NAME")
-
-	// Preparation de la chaine de connexion a la base de donnees.
-	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", user, pwd, host, port, name)
+	// Sur Scalingo : SCALINGO_POSTGRESQL_URL (fournie par l'addon). En local : DATABASE_URL (.env).
+	url := GetEnvWithDefault("SCALINGO_POSTGRESQL_URL", "")
+	if url == "" {
+		url = GetRequiredEnv("DATABASE_URL")
+	}
 
 	// Mise en place de la connexion.
-	dbContext, dbContextErr := sql.Open("mysql", connectionString)
+	dbContext, dbContextErr := sql.Open("pgx", url)
 	if dbContextErr != nil {
 		log.Fatalf("Erreur connection base de donnees - Erreur : \n\t %s", dbContextErr.Error())
 	}

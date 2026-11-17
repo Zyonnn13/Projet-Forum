@@ -5,6 +5,8 @@ import (
 
 	"projet-forum/api/helper"
 	"projet-forum/api/services"
+
+	"github.com/gorilla/mux"
 )
 
 type UploadControllers struct {
@@ -16,7 +18,7 @@ func InitUploadController(service *services.UploadService) *UploadControllers {
 }
 
 // Upload reçoit un fichier en multipart/form-data (champ "file"),
-// l'enregistre dans le dossier uploads et renvoie son URL publique.
+// l'enregistre en base de données et renvoie son URL publique.
 func (c *UploadControllers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Taille maximale en mémoire : 10 Mo.
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -39,7 +41,26 @@ func (c *UploadControllers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// URL absolue servie par l'API, utilisable directement dans une balise <img>.
-	urlPublique := "http://" + r.Host + chemin
+	// Sur Scalingo, le HTTPS est géré en amont : il nous l'indique dans X-Forwarded-Proto.
+	scheme := "http"
+	if r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	urlPublique := scheme + "://" + r.Host + chemin
 
 	helper.WriteJSON(w, http.StatusCreated, map[string]string{"url": urlPublique})
+}
+
+// ServeImage renvoie une image enregistrée en base (ex : GET /uploads/upload-123.png).
+func (c *UploadControllers) ServeImage(w http.ResponseWriter, r *http.Request) {
+	nom := mux.Vars(r)["nom"]
+
+	contentType, data, err := c.service.GetImage(nom)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Write(data)
 }

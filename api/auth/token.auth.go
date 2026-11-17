@@ -3,10 +3,16 @@ package auth
 import (
 	"time"
 
+	"projet-forum/api/config"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("hjgkhukgh")
+// jwtSecret lit la clé de signature des JWT dans la variable d'environnement JWT_SECRET.
+// Si elle est absente, l'API s'arrête avec un message clair (GetRequiredEnv).
+func jwtSecret() []byte {
+	return []byte(config.GetRequiredEnv("JWT_SECRET"))
+}
 
 // Claims represente les informations stockees dans le JWT.
 // Les champs personnalises permettent d'identifier l'utilisateur et son role.
@@ -38,5 +44,5 @@ func GenerateToken(userID string, role string) (string, error) {
 	// On signe le token avec l'algorithme HS256 et la cle secrete.
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString(jwtSecret)
+	return token.SignedString(jwtSecret())
 }

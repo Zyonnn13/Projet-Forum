@@ -1,0 +1,16 @@
+# Base PostgreSQL locale, identique à la production (Scalingo).
+# Lancer : docker compose up -d   —   Arrêter : docker compose down
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: forum
+      POSTGRES_PASSWORD: forum
+      POSTGRES_DB: forum
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

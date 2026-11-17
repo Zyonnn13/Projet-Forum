@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"os"
+	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"projet-forum/api/repositories"
 )
 
 // Extensions d'images autorisées à l'upload.
@@ -18,37 +21,48 @@ var allowedImageExtensions = map[string]bool{
 	".webp": true,
 }
 
-// UploadService gère l'enregistrement des fichiers dans le dossier uploads.
+// UploadService enregistre les images en base de données
+// (le disque d'un conteneur Scalingo est effacé à chaque redéploiement).
 type UploadService struct {
-	uploadDir string
+	imageRepository *repositories.ImageRepository
 }
 
-func InitUploadService() *UploadService {
-	uploadDir := "./uploads"
-	// On s'assure que le dossier uploads existe au démarrage.
-	os.MkdirAll(uploadDir, 0755)
-	return &UploadService{uploadDir: uploadDir}
+func InitUploadService(imageRepository *repositories.ImageRepository) *UploadService {
+	return &UploadService{imageRepository: imageRepository}
 }
 
-// SaveImage valide l'extension, enregistre le fichier sous un nom unique
-// dans le dossier uploads, et retourne son chemin public (ex : /uploads/upload-123.png).
+// SaveImage valide l'image, l'enregistre en base sous un nom unique
+// et retourne son chemin public (ex : /uploads/upload-123.png).
 func (s *UploadService) SaveImage(file multipart.File, header *multipart.FileHeader) (string, error) {
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedImageExtensions[ext] {
 		return "", fmt.Errorf("format non autorisé (jpg, jpeg, png, gif, webp uniquement)")
 	}
 
-	// Création d'un fichier au nom unique dans le dossier uploads.
-	dest, err := os.CreateTemp(s.uploadDir, "upload-*"+ext)
+	// Limite de 5 Mo par image.
+	if header.Size > 5<<20 {
+		return "", fmt.Errorf("image trop lourde (5 Mo maximum)")
+	}
+
+	// Lecture du contenu du fichier.
+	data, err := io.ReadAll(file)
 	if err != nil {
-		return "", fmt.Errorf("erreur lors de la création du fichier : %s", err.Error())
-	}
-	defer dest.Close()
-
-	// Copie du contenu reçu dans le fichier de destination.
-	if _, err := io.Copy(dest, file); err != nil {
-		return "", fmt.Errorf("erreur lors de l'enregistrement du fichier : %s", err.Error())
+		return "", fmt.Errorf("erreur lors de la lecture du fichier : %s", err.Error())
 	}
 
-	return "/uploads/" + filepath.Base(dest.Name()), nil
+	// Nom unique basé sur l'heure actuelle en nanosecondes.
+	nom := fmt.Sprintf("upload-%d%s", time.Now().UnixNano(), ext)
+
+	// DetectContentType devine le type MIME (image/png, image/jpeg...) à partir du contenu.
+	err = s.imageRepository.Create(nom, http.DetectContentType(data), data)
+	if err != nil {
+		return "", fmt.Errorf("erreur lors de l'enregistrement de l'image : %s", err.Error())
+	}
+
+	return "/uploads/" + nom, nil
+}
+
+// GetImage retourne le type MIME et le contenu d'une image enregistrée.
+func (s *UploadService) GetImage(nom string) (string, []byte, error) {
+	return s.imageRepository.FindByNom(nom)
 }

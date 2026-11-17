@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"projet-forum/api/models"
+	"projet-forum/api/utils"
 )
 
 type FilRepository struct {
@@ -22,14 +23,9 @@ func (r *FilRepository) Create(f *models.FilDeDiscussion, categoryIDs []int) err
 		return err
 	}
 
-	query := `INSERT INTO fils_de_discussion (titre, etat, auteur_id) VALUES (?, ?, ?)`
-	result, err := tx.Exec(query, f.Titre, f.Etat, f.AuteurID)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	id, err := result.LastInsertId()
+	query := `INSERT INTO fils_de_discussion (titre, etat, auteur_id) VALUES (?, ?, ?) RETURNING id`
+	var id int64
+	err = tx.QueryRow(utils.Rebind(query), f.Titre, f.Etat, f.AuteurID).Scan(&id)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -39,7 +35,7 @@ func (r *FilRepository) Create(f *models.FilDeDiscussion, categoryIDs []int) err
 	if len(categoryIDs) > 0 {
 		catQuery := `INSERT INTO fils_categories (fil_id, categorie_id) VALUES (?, ?)`
 		for _, catID := range categoryIDs {
-			_, err = tx.Exec(catQuery, f.ID, catID)
+			_, err = tx.Exec(utils.Rebind(catQuery), f.ID, catID)
 			if err != nil {
 				tx.Rollback()
 				return err
@@ -68,11 +64,11 @@ func (r *FilRepository) FindAll(page, limit int, search string, searchType strin
 
 	if search != "" {
 		if searchType == "authors" {
-			query += ` AND u.username LIKE ? `
+			query += ` AND u.username ILIKE ? `
 		} else if searchType == "messages" {
-			query += ` AND f.id IN (SELECT DISTINCT fil_id FROM messages WHERE contenu LIKE ?) `
+			query += ` AND f.id IN (SELECT DISTINCT fil_id FROM messages WHERE contenu ILIKE ?) `
 		} else {
-			query += ` AND f.titre LIKE ? `
+			query += ` AND f.titre ILIKE ? `
 		}
 		args = append(args, "%"+search+"%")
 	}
@@ -85,7 +81,7 @@ func (r *FilRepository) FindAll(page, limit int, search string, searchType strin
 	query += ` ORDER BY f.created_at DESC LIMIT ? OFFSET ? `
 	args = append(args, limit, offset)
 
-	rows, err := r.db.Query(query, args...)
+	rows, err := r.db.Query(utils.Rebind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,10 +96,10 @@ func (r *FilRepository) FindAll(page, limit int, search string, searchType strin
 		if err := rows.Scan(&f.ID, &f.Titre, &f.Etat, &f.AuteurID, &createdAt, &updatedAt, &authorUsername, &authorEmail, &authorRole, &authorBanned); err != nil {
 			return nil, err
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05", string(createdAt)); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, string(createdAt)); err == nil {
 			f.CreatedAt = t
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05", string(updatedAt)); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, string(updatedAt)); err == nil {
 			f.UpdatedAt = t
 		}
 		f.Auteur = &models.Utilisateur{
@@ -135,11 +131,11 @@ func (r *FilRepository) CountAll(search string, searchType string, categoryID in
 
 	if search != "" {
 		if searchType == "authors" {
-			query += ` AND u.username LIKE ? `
+			query += ` AND u.username ILIKE ? `
 		} else if searchType == "messages" {
-			query += ` AND f.id IN (SELECT DISTINCT fil_id FROM messages WHERE contenu LIKE ?) `
+			query += ` AND f.id IN (SELECT DISTINCT fil_id FROM messages WHERE contenu ILIKE ?) `
 		} else {
-			query += ` AND f.titre LIKE ? `
+			query += ` AND f.titre ILIKE ? `
 		}
 		args = append(args, "%"+search+"%")
 	}
@@ -150,7 +146,7 @@ func (r *FilRepository) CountAll(search string, searchType string, categoryID in
 	}
 
 	var count int
-	err := r.db.QueryRow(query, args...).Scan(&count)
+	err := r.db.QueryRow(utils.Rebind(query), args...).Scan(&count)
 	if err != nil {
 		return 0, err
 	}
@@ -181,10 +177,10 @@ func (r *FilRepository) FindAllAdmin() ([]models.FilDeDiscussion, error) {
 		if err := rows.Scan(&f.ID, &f.Titre, &f.Etat, &f.AuteurID, &createdAt, &updatedAt, &authorUsername, &authorEmail, &authorRole, &authorBanned); err != nil {
 			return nil, err
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05", string(createdAt)); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, string(createdAt)); err == nil {
 			f.CreatedAt = t
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05", string(updatedAt)); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, string(updatedAt)); err == nil {
 			f.UpdatedAt = t
 		}
 		f.Auteur = &models.Utilisateur{
@@ -206,7 +202,7 @@ func (r *FilRepository) FindByID(id int) (*models.FilDeDiscussion, error) {
 		LEFT JOIN utilisateurs u ON f.auteur_id = u.id
 		WHERE f.id = ?
 	`
-	row := r.db.QueryRow(query, id)
+	row := r.db.QueryRow(utils.Rebind(query), id)
 
 	f := &models.FilDeDiscussion{}
 	var createdAt, updatedAt []uint8
@@ -219,10 +215,10 @@ func (r *FilRepository) FindByID(id int) (*models.FilDeDiscussion, error) {
 		}
 		return nil, err
 	}
-	if t, err := time.Parse("2006-01-02 15:04:05", string(createdAt)); err == nil {
+	if t, err := time.Parse(time.RFC3339Nano, string(createdAt)); err == nil {
 		f.CreatedAt = t
 	}
-	if t, err := time.Parse("2006-01-02 15:04:05", string(updatedAt)); err == nil {
+	if t, err := time.Parse(time.RFC3339Nano, string(updatedAt)); err == nil {
 		f.UpdatedAt = t
 	}
 	f.Auteur = &models.Utilisateur{
@@ -238,12 +234,12 @@ func (r *FilRepository) FindByID(id int) (*models.FilDeDiscussion, error) {
 
 func (r *FilRepository) Update(f *models.FilDeDiscussion) error {
 	query := `UPDATE fils_de_discussion SET titre = ?, etat = ? WHERE id = ?`
-	_, err := r.db.Exec(query, f.Titre, f.Etat, f.ID)
+	_, err := r.db.Exec(utils.Rebind(query), f.Titre, f.Etat, f.ID)
 	return err
 }
 
 func (r *FilRepository) Delete(id int) error {
 	query := `DELETE FROM fils_de_discussion WHERE id = ?`
-	_, err := r.db.Exec(query, id)
+	_, err := r.db.Exec(utils.Rebind(query), id)
 	return err
 }

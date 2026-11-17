@@ -45,7 +45,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// On verifie en temps reel si l'utilisateur est banni en base de donnees.
 		if DB != nil {
 			var banned bool
-			err := DB.QueryRow("SELECT banned FROM utilisateurs WHERE id = ?", claims.UserID).Scan(&banned)
+			err := DB.QueryRow("SELECT banned FROM utilisateurs WHERE id = $1", claims.UserID).Scan(&banned)
 			if err != nil {
 				if err == sql.ErrNoRows {
 					helper.WriteError(w, http.StatusUnauthorized, "Utilisateur introuvable")

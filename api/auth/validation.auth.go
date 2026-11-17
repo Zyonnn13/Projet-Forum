@@ -25,7 +25,7 @@ func ValidateToken(tokenString string) (*Claims, error) {
 				)
 			}
 			// Cette cle doit etre la meme que celle utilisee pour signer le token.
-			return jwtSecret, nil
+			return jwtSecret(), nil
 		},
 		// Ces options garantissent que le token vient de l'API attendue
 		// et qu'il est destine au bon client.

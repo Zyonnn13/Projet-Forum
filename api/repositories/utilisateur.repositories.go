@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"projet-forum/api/models"
+	"projet-forum/api/utils"
 )
 
 type UtilisateurRepository struct {
@@ -16,13 +17,9 @@ func InitUtilisateurRepository(db *sql.DB) *UtilisateurRepository {
 }
 
 func (r *UtilisateurRepository) Create(u *models.Utilisateur) error {
-	query := `INSERT INTO utilisateurs (username, email, password_hash, avatar) VALUES (?, ?, ?, ?)`
-	result, err := r.db.Exec(query, u.Username, u.Email, u.PasswordHash, u.Avatar)
-	if err != nil {
-		return err
-	}
-
-	id, err := result.LastInsertId()
+	query := `INSERT INTO utilisateurs (username, email, password_hash, avatar) VALUES (?, ?, ?, ?) RETURNING id`
+	var id int64
+	err := r.db.QueryRow(utils.Rebind(query), u.Username, u.Email, u.PasswordHash, u.Avatar).Scan(&id)
 	if err != nil {
 		return err
 	}
@@ -32,7 +29,7 @@ func (r *UtilisateurRepository) Create(u *models.Utilisateur) error {
 
 func (r *UtilisateurRepository) FindByUsernameOrEmail(identifiant string) (*models.Utilisateur, error) {
 	query := `SELECT id, username, email, password_hash, role, banned, created_at FROM utilisateurs WHERE username = ? OR email = ?`
-	row := r.db.QueryRow(query, identifiant, identifiant)
+	row := r.db.QueryRow(utils.Rebind(query), identifiant, identifiant)
 
 	u := &models.Utilisateur{}
 	var createdAt []uint8
@@ -49,7 +46,7 @@ func (r *UtilisateurRepository) FindByUsernameOrEmail(identifiant string) (*mode
 
 func (r *UtilisateurRepository) FindByID(id int) (*models.Utilisateur, error) {
 	query := `SELECT id, username, email, password_hash, role, banned, avatar FROM utilisateurs WHERE id = ?`
-	row := r.db.QueryRow(query, id)
+	row := r.db.QueryRow(utils.Rebind(query), id)
 
 	u := &models.Utilisateur{}
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.Role, &u.Banned, &u.Avatar)
@@ -84,12 +81,12 @@ func (r *UtilisateurRepository) FindAll() ([]models.Utilisateur, error) {
 
 func (r *UtilisateurRepository) BanUser(id int) error {
 	query := `UPDATE utilisateurs SET banned = TRUE WHERE id = ?`
-	_, err := r.db.Exec(query, id)
+	_, err := r.db.Exec(utils.Rebind(query), id)
 	return err
 }
 
 func (r *UtilisateurRepository) UpdateAvatar(id int, avatar string) error {
 	query := `UPDATE utilisateurs SET avatar = ? WHERE id = ?`
-	_, err := r.db.Exec(query, avatar, id)
+	_, err := r.db.Exec(utils.Rebind(query), avatar, id)
 	return err
 }
